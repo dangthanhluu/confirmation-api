@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Teacher Account</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.2/dist/axios.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const App = () => {
+      const [step, setStep] = useState(1);
+      const [formData, setFormData] = useState({
+        firstName: '',
+        lastName: '',
+        displayName: '',
+        username: '',
+        domain: '@gdkontum.edu.vn',
+        password: '',
+        passwordType: 'auto',
+        school: '',
+        license: '',
+        jobTitle: '',
+        department: '',
+        city: '',
+        state: '',
+        postalCode: '',
+        country: 'Việt Nam'
+      });
+      const [isAutoPassword, setIsAutoPassword] = useState(true);
+      const [message, setMessage] = useState('');
+      const [userId, setUserId] = useState(null);
+      const [isEditing, setIsEditing] = useState(false);
+      const [confirmationCode, setConfirmationCode] = useState('');
+      const [isCodeVerified, setIsCodeVerified] = useState(false);
+      const [showAdminLogin, setShowAdminLogin] = useState(false);
+      const [adminUsername, setAdminUsername] = useState('');
+      const [adminPassword, setAdminPassword] = useState('');
+      const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(localStorage.getItem('isAdminAuthenticated') === 'true');
+      const [codeCount, setCodeCount] = useState(1);
+      const [adminSchool, setAdminSchool] = useState('');
+      const [customCode, setCustomCode] = useState('');
+      const [isCustomCode, setIsCustomCode] = useState(false);
+      const [codes, setCodes] = useState([]);
+      const [accounts, setAccounts] = useState([]);
+
+      const API_BASE_URL = 'https://confirmation-api-cmuv.onrender.com';
+
+      useEffect(() => {
+        if (isAdminAuthenticated && step === 'admin') {
+          fetchCodes();
+          fetchAccounts();
+        }
+      }, [isAdminAuthenticated, step]);
+
+      const generatePassword = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+        return Array(12).fill().map(() => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+      };
+
+      const generateRandomCode = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        return Array(6).fill().map(() => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+      };
+
+      const handleInputChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+      };
+
+      const handleCodeChange = (e) => {
+        setConfirmationCode(e.target.value);
+      };
+
+      const verifyCode = async (e) => {
+        e.preventDefault();
+        if (!formData.school || !confirmationCode) {
+          setMessage('Vui lòng nhập trường học và mã xác nhận.');
+          return;
+        }
+        setMessage('Đang kiểm tra mã xác nhận...');
+
+        try {
+          const response = await axios.post(`${API_BASE_URL}/verify-code`, {
+            code: confirmationCode,
+            school: formData.school
+          });
+
+          if (response.data.valid) {
+            setIsCodeVerified(true);
+            setMessage('Mã xác nhận hợp lệ!');
+          } else {
+            setIsCodeVerified(false);
+            setMessage('Mã xác nhận không hợp lệ hoặc không phù hợp với trường học.');
+          }
+        } catch (error) {
+          setIsCodeVerified(false);
+          setMessage(`Lỗi: ${error.response?.data?.error || error.message}`);
+        }
+      };
+
+      const togglePasswordMode = () => {
+        setIsAutoPassword(!isAutoPassword);
+        setFormData({
+          ...formData,
+          password: isAutoPassword ? '' : generatePassword(),
+          passwordType: isAutoPassword ? 'manual' : 'auto'
+        });
+      };
+
+      const handleNext = (e) => {
+        e.preventDefault();
+        if (step === 1 && isCodeVerified) {
+          setStep(2);
+        } else {
+          setMessage('Vui lòng xác minh mã xác nhận trước.');
+        }
+      };
+
+      const handleBack = () => {
+        if (step === 2) {
+          setStep(1);
+        } else if (step === 3) {
+          setStep(2);
+        }
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+  if (!isCodeVerified) {
+    setMessage('Vui lòng xác minh mã xác nhận trước khi tạo tài khoản.');
+    return;
+  }
+
+        setMessage('Đang xử lý...');
+
+        try {
+          const password = isAutoPassword ? generatePassword() : formData.password;
+          const response = await axios.post(`${API_BASE_URL}/create-teacher`, {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            displayName: formData.displayName,
+            username: formData.username,
+            domain: formData.domain,
+            password: password,
+            passwordType: isAutoPassword ? 'auto' : 'manual',
+            school: formData.school,
+            license: formData.license,
+            jobTitle: formData.jobTitle,
+            department: formData.department,
+            city: formData.city,
+            state: formData.state,
+            postalCode: formData.postalCode,
+            country: formData.country,
+            confirmationCode: confirmationCode
+          });
+
+          setUserId(response.data.userId);
+          setFormData({ ...formData, password, passwordType: isAutoPassword ? 'auto' : 'manual' });
+          setStep(3);
+          setMessage('');
+        } catch (error) {
+          setMessage(`Lỗi: ${error.response?.data?.error || error.message}`);
+        }
+      };
+
+      const handleEdit = () => {
+        setIsEditing(true);
+      };
+
+      const handleSaveEdit = async (e) => {
+        e.preventDefault();
+        setMessage('Đang cập nhật...');
+
+        try {
+          const response = await axios.post(`${API_BASE_URL}/update-teacher`, {
+            userId: userId,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            displayName: formData.displayName,
+            license: formData.license,
+            jobTitle: formData.jobTitle,
+            department: formData.department,
+            city: formData.city,
+            state: formData.state,
+            postalCode: formData.postalCode,
+            country: formData.country,
+            school: formData.school
+          });
+
+          setIsEditing(false);
+          setMessage('Cập nhật thành công!');
+        } catch (error) {
+          setMessage(`Lỗi: ${error.response?.data?.error || error.message}`);
+        }
+      };
+
+      const handleAdminLogin = (e) => {
+        e.preventDefault();
+        if (adminUsername === 'admin' && adminPassword === 'password123') {
+          setIsAdminAuthenticated(true);
+          localStorage.setItem('isAdminAuthenticated', 'true');
+          setStep('admin');
+          setShowAdminLogin(false);
+          setMessage('');
+          fetchCodes();
+          fetchAccounts();
+        } else {
+          setMessage('Tên người dùng hoặc mật khẩu không đúng.');
+        }
+      };
+
+      const handleAdminLogout = () => {
+        setIsAdminAuthenticated(false);
+        localStorage.removeItem('isAdminAuthenticated');
+        setStep(1);
+        setAdminUsername('');
+        setAdminPassword('');
+        setCodes([]);
+        setAccounts([]);
+        setMessage('');
+      };
+
+      const fetchCodes = async () => {
+        try {
+          const response = await axios.get(`${API_BASE_URL}/list-codes`, {
+            headers: { Authorization: 'Bearer admin-token' }
+          });
+          setCodes(response.data || []);
+        } catch (error) {
+          setMessage(`Lỗi khi lấy danh sách mã: ${error.response?.data?.error || error.message}`);
+        }
+      };
+
+      const fetchAccounts = async () => {
+        try {
+          const response = await axios.get(`${API_BASE_URL}/list-accounts`, {
+            headers: { Authorization: 'Bearer admin-token' }
+          });
+          setAccounts(response.data || []);
+        } catch (error) {
+          setMessage(`Lỗi khi lấy danh sách tài khoản: ${error.response?.data?.error || error.message}`);
+        }
+      };
+
+      const handleGenerateCodes = async (e) => {
+        e.preventDefault();
+        setMessage('Đang tạo mã...');
+
+        try {
+          let newCodes = [];
+          if (isCustomCode && customCode) {
+            if (customCode.length < 6) {
+              setMessage('Mã tùy chỉnh phải có ít nhất 6 ký tự.');
+              return;
+            }
+            newCodes = [{ code: customCode, school: adminSchool || 'Any' }];
+          } else {
+            newCodes = Array.from({ length: codeCount }, () => ({
+              code: generateRandomCode(),
+              school: adminSchool || 'Any'
+            }));
+          }
+
+          const response = await axios.post(`${API_BASE_URL}/generate-codes`, { codes: newCodes }, {
+            headers: { Authorization: 'Bearer admin-token' }
+          });
+
+          setMessage(response.data.message || 'Tạo mã thành công!');
+          setCustomCode('');
+          setCodeCount(1);
+          setCodes(response.data.codes || []);
+        } catch (error) {
+          setMessage(`Lỗi khi tạo mã: ${error.response?.data?.error || error.message}`);
+        }
+      };
+
+      return (
+        <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
+          {step !== 'admin' && (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setShowAdminLogin(true)}
+                className="text-blue-600 hover:underline"
+              >
+                Đăng nhập quản trị
+              </button>
+            </div>
+          )}
+
+          {showAdminLogin && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+              <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
+                <h2 className="text-lg font-bold mb-4 text-center">Đăng nhập quản trị</h2>
+                <form onSubmit={handleAdminLogin} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Tên người dùng</label>
+                    <input
+                      type="text"
+                      value={adminUsername}
+                      onChange={(e) => setAdminUsername(e.target.value)}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Mật khẩu</label>
+                    <input
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminLogin(false)}
+                      className="w-full bg-gray-600 text-white p-2 rounded-md hover:bg-gray-700"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                    >
+                      Đăng nhập
+                    </button>
+                  </div>
+                </form>
+                {message && <p className="mt-4 text-center text-sm text-red-600">{message}</p>}
+              </div>
+            </div>
+          )}
+
+          {step === 'admin' ? (
+            <div>
+              <h1 className="text-2xl font-bold mb-6 text-center">Quản lý Mã Xác Nhận và Tài Khoản</h1>
+              <div className="flex justify-between mb-4">
+                <button
+                  onClick={() => {
+                    setStep(1);
+                    setMessage('');
+                  }}
+                  className="text-blue-600 hover:underline"
+                >
+                  Quay lại trang đăng ký
+                </button>
+                <button
+                  onClick={handleAdminLogout}
+                  className="text-red-600 hover:underline"
+                >
+                  Đăng xuất
+                </button>
+              </div>
+
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">Tạo mã xác nhận</h2>
+                <form onSubmit={handleGenerateCodes} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Trường học</label>
+                    <input
+                      type="text"
+                      value={adminSchool}
+                      onChange={(e) => setAdminSchool(e.target.value)}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      placeholder="Nhập tên trường học (hoặc để trống cho mọi trường)"
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={isCustomCode}
+                      onChange={() => setIsCustomCode(!isCustomCode)}
+                      className="mr-2"
+                    />
+                    <label className="text-sm font-medium text-gray-700">Nhập mã tùy chỉnh</label>
+                  </div>
+                  {isCustomCode ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Mã tùy chỉnh</label>
+                      <input
+                        type="text"
+                        value={customCode}
+                        onChange={(e) => setCustomCode(e.target.value)}
+                        className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                        required
+                        placeholder="Nhập mã (6 ký tự trở lên)"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Số lượng mã</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={codeCount}
+                        onChange={(e) => setCodeCount(Math.max(1, parseInt(e.target.value)))}
+                        className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                        required
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                  >
+                    Tạo mã
+                  </button>
+                </form>
+              </div>
+
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold mb-4">Danh sách mã xác nhận</h2>
+                <table className="min-w-full bg-white border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="py-2 px-4 border-b">Mã</th>
+                      <th className="py-2 px-4 border-b">Trường học</th>
+                      <th className="py-2 px-4 border-b">Trạng thái</th>
+                      <th className="py-2 px-4 border-b">Thời gian tạo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {codes.length > 0 ? (
+                      codes.map((code) => (
+                        <tr key={code.code}>
+                          <td className="py-2 px-4 border-b">{code.code}</td>
+                          <td className="py-2 px-4 border-b">{code.school || 'Any'}</td>
+                          <td className="py-2 px-4 border-b">{code.used ? 'Đã dùng' : 'Chưa dùng'}</td>
+                          <td className="py-2 px-4 border-b">{new Date(code.createdAt).toLocaleString('vi-VN')}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4" className="py-2 px-4 border-b text-center">Chưa có mã xác nhận</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Danh sách tài khoản đã tạo</h2>
+                <table className="min-w-full bg-white border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="py-2 px-4 border-b">Tên hiển thị</th>
+                      <th className="py-2 px-4 border-b">Tên người dùng</th>
+                      <th className="py-2 px-4 border-b">Mã xác nhận</th>
+                      <th className="py-2 px-4 border-b">Giấy phép</th>
+                      <th className="py-2 px-4 border-b">Thời gian tạo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.length > 0 ? (
+                      accounts.map((account) => (
+                        <tr key={account.userId}>
+                          <td className="py-2 px-4 border-b">{account.displayName}</td>
+                          <td className="py-2 px-4 border-b">{account.userPrincipalName}</td>
+                          <td className="py-2 px-4 border-b">{account.confirmationCode}</td>
+                          <td className="py-2 px-4 border-b">
+                            {account.license === 'a1_teacher' ? 'A1 - Giáo viên' : account.license === 'a1_student' ? 'A1 - Học sinh' : 'A3 - Nhà trường'}
+                          </td>
+                          <td className="py-2 px-4 border-b">{new Date(account.createdAt).toLocaleString('vi-VN')}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="py-2 px-4 border-b text-center">Chưa có tài khoản</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <>
+              {step < 3 && (
+                <div className="flex justify-between mb-4">
+                  <div className={`p-2 ${step === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Bước 1: Thông tin cơ bản</div>
+                  <div className={`p-2 ${step === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>Bước 2: Thông tin tài khoản</div>
+                </div>
+              )}
+
+              {step === 1 && (
+                <form onSubmit={handleNext} className="space-y-4">
+                  <h1 className="text-2xl font-bold mb-6 text-center">Tạo tài khoản giáo viên</h1>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Trường học</label>
+                    <input
+                      type="text"
+                      name="school"
+                      value={formData.school}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Mã xác nhận</label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={confirmationCode}
+                        onChange={handleCodeChange}
+                        className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={verifyCode}
+                        className="mt-1 p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        Kiểm tra
+                      </button>
+                    </div>
+                  </div>
+                  {isCodeVerified && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tên</label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={formData.firstName}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Họ</label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={formData.lastName}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tên hiển thị</label>
+                        <input
+                          type="text"
+                          name="displayName"
+                          value={formData.displayName}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tên người dùng</label>
+                        <div className="flex">
+                          <input
+                            type="text"
+                            name="username"
+                            value={formData.username}
+                            onChange={handleInputChange}
+                            className="mt-1 block w-full p-2 border border-gray-300 rounded-l-md"
+                            required
+                          />
+                          <span className="mt-1 p-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md">
+                            {formData.domain}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Mật khẩu</label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            name="password"
+                            value={formData.password}
+                            onChange={handleInputChange}
+                            disabled={isAutoPassword}
+                            className="mt-1 block w-full p-2 border border-gray-300 rounded-md disabled:bg-gray-100"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={togglePasswordMode}
+                            className="mt-1 p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          >
+                            {isAutoPassword ? 'Nhập thủ công' : 'Tự động'}
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                      >
+                        Tiếp theo
+                      </button>
+                    </>
+                  )}
+                </form>
+              )}
+
+              {step === 2 && (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <h1 className="text-2xl font-bold mb-6 text-center">Tạo tài khoản giáo viên</h1>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Giấy phép</label>
+                    <select
+                      name="license"
+                      value={formData.license}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    >
+                      <option value="">Chọn giấy phép</option>
+                      <option value="a1_teacher">A1 - Giáo viên</option>
+                      <option value="a1_student">A1 - Học sinh</option>
+                      <option value="a3_school">A3 - Nhà trường</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Chức danh</label>
+                    <input
+                      type="text"
+                      name="jobTitle"
+                      value={formData.jobTitle}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Phòng ban</label>
+                    <input
+                      type="text"
+                      name="department"
+                      value={formData.department}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Thành phố</label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Tỉnh</label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Mã bưu điện</label>
+                    <input
+                      type="text"
+                      name="postalCode"
+                      value={formData.postalCode}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
+                    <input
+                      type="text"
+                      name="country"
+                      value={formData.country}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={handleBack}
+                      className="w-full bg-gray-600 text-white p-2 rounded-md hover:bg-gray-700"
+                    >
+                      Quay lại
+                    </button>
+                    <button
+                      type="submit"
+                      className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                    >
+                      Tạo tài khoản
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-4">
+                  <h1 className="text-2xl font-bold mb-6 text-center">Kết quả tạo tài khoản</h1>
+                  {isEditing ? (
+                    <form onSubmit={handleSaveEdit} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tên hiển thị</label>
+                        <input
+                          type="text"
+                          name="displayName"
+                          value={formData.displayName}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tên</label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={formData.firstName}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Họ</label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={formData.lastName}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Trường học</label>
+                        <input
+                          type="text"
+                          name="school"
+                          value={formData.school}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Giấy phép</label>
+                        <select
+                          name="license"
+                          value={formData.license}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        >
+                          <option value="">Chọn giấy phép</option>
+                          <option value="a1_teacher">A1 - Giáo viên</option>
+                          <option value="a1_student">A1 - Học sinh</option>
+                          <option value="a3_school">A3 - Nhà trường</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Chức danh</label>
+                        <input
+                          type="text"
+                          name="jobTitle"
+                          value={formData.jobTitle}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Phòng ban</label>
+                        <input
+                          type="text"
+                          name="department"
+                          value={formData.department}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Thành phố</label>
+                        <input
+                          type="text"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tỉnh</label>
+                        <input
+                          type="text"
+                          name="state"
+                          value={formData.state}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Mã bưu điện</label>
+                        <input
+                          type="text"
+                          name="postalCode"
+                          value={formData.postalCode}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Quốc gia</label>
+                        <input
+                          type="text"
+                          name="country"
+                          value={formData.country}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
+                          required
+                        />
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(false)}
+                          className="w-full bg-gray-600 text-white p-2 rounded-md hover:bg-gray-700"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                        >
+                          Lưu chỉnh sửa
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <h2 className="text-xl font-bold text-center">Kết quả tạo tài khoản</h2>
+                      <div>
+                        <strong>Tên hiển thị:</strong> {formData.displayName}
+                      </div>
+                      <div>
+                        <strong>Tên người dùng:</strong> {formData.username}{formData.domain}
+                      </div>
+                      <div>
+                        <strong>Mật khẩu:</strong> {formData.password} ({formData.passwordType === 'auto' ? 'Tự động' : 'Thủ công'})
+                      </div>
+                      <div>
+                        <strong>Giấy phép:</strong> {formData.license === 'a1_teacher' ? 'A1 - Giáo viên' : formData.license === 'a1_student' ? 'A1 - Học sinh' : 'A3 - Nhà trường'}
+                      </div>
+                      <div>
+                        <strong>Trường học:</strong> {formData.school}
+                      </div>
+                      <div>
+                        <strong>Tên:</strong> {formData.firstName}
+                      </div>
+                      <div>
+                        <strong>Họ:</strong> {formData.lastName}
+                      </div>
+                      <div>
+                        <strong>Chức danh:</strong> {formData.jobTitle}
+                      </div>
+                      <div>
+                        <strong>Phòng ban:</strong> {formData.department}
+                      </div>
+                      <div>
+                        <strong>Thành phố:</strong> {formData.city}
+                      </div>
+                      <div>
+                        <strong>Tỉnh:</strong> {formData.state}
+                      </div>
+                      <div>
+                        <strong>Mã bưu điện:</strong> {formData.postalCode}
+                      </div>
+                      <div>
+                        <strong>Quốc gia:</strong> {formData.country}
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={handleEdit}
+                          className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                        >
+                          Chỉnh sửa
+                        </button>
+                        <button
+                          onClick={() => {
+                            setStep(1);
+                            setFormData({
+                              firstName: '',
+                              lastName: '',
+                              displayName: '',
+                              username: '',
+                              domain: '@gdkontum.edu.vn',
+                              password: '',
+                              passwordType: 'auto',
+                              school: '',
+                              license: '',
+                              jobTitle: '',
+                              department: '',
+                              city: '',
+                              state: '',
+                              postalCode: '',
+                              country: 'Việt Nam'
+                            });
+                            setUserId(null);
+                            setIsAutoPassword(true);
+                            setConfirmationCode('');
+                            setIsCodeVerified(false);
+                            setMessage('');
+                          }}
+                          className="w-full bg-green-600 text-white p-2 rounded-md hover:bg-green-700"
+                        >
+                          Tạo tài khoản mới
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {message && !showAdminLogin && step !== 'admin' && <p className="mt-4 text-center text-sm text-gray-600">{message}</p>}
+          {message && step === 'admin' && <p className="mt-4 text-center text-sm text-gray-600">{message}</p>}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
